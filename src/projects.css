@@ -1,0 +1,3 @@
+.remove-project{display:inline-flex;align-items:center;gap:6px;margin-top:22px;color:#b64343;font-size:11px;font-weight:650}
+.remove-project:hover{color:#8f2e2e;text-decoration:underline}
+@media(prefers-color-scheme:dark){.remove-project{color:#ee8585}.remove-project:hover{color:#ffabab}}

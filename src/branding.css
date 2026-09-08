@@ -1,0 +1,2 @@
+.brand-logo{display:block;width:54px;height:22px;object-fit:contain;object-position:left center}.brand .brand-logo+span{margin-left:1px;color:#253044;font-size:14px;font-weight:700;letter-spacing:-.02em}.brand-mark{display:none}.workspace-icon{background:#eaf0ff;color:#365fce}
+@media(prefers-color-scheme:dark){.brand .brand-logo+span{color:#eef1f7}.workspace-icon{background:#26365d;color:#a9bfff}}

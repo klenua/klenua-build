@@ -1,0 +1,7 @@
+.login-modal .remember-login{display:flex;align-items:flex-start;gap:8px;margin-top:16px;padding:10px;border:1px solid #e3e7ed;border-radius:8px;background:#f8fafc;color:#394456}
+.remember-login input{width:14px;height:14px;margin:1px 0 0;accent-color:#1465e8}
+.remember-login span{display:block}
+.remember-login strong,.remember-login small{display:block}
+.remember-login strong{font-size:11px}
+.remember-login small{margin-top:3px;color:#7b8796;font-size:10px;font-weight:500}
+@media(prefers-color-scheme:dark){.login-modal .remember-login{border-color:#3a404a;background:#232730;color:#e0e4ec}.remember-login small{color:#9ca5b3}}
