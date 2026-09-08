@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "notes": "VersionPilot updates",
+  "pub_date": "2026-09-08T12:00:00Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "url": "https://github.com/klenua/versionpilot/releases/download/v0.2.0/VersionPilot.app.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSVEk5Nzc1MlZLYWIyaXlkT0VKQVFVNC9QYmNCL0hadU9aYjJ0eU8zeTVwU3FxQzFZRWtDRjhMT2RNcnZTU1YxNWVWVjUwdUNVUjJzTXNITm9PYWY3RGxUeFBaL1A2MWdzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg4ODY1NDE5CWZpbGU6VmVyc2lvblBpbG90LmFwcC50YXIuZ3oKb01VZkNaK21TY2FsWEpOdmQxd3FYeHc0MHJHZU1PWTdjMlRacFVucEVSd2FzY1Y3WUxiTnQ3dXlJdjVYMjVOcTdrWm1jcCtPbmsrcXhnZ21mL1ZuQWc9PQo="
+    }
+  }
+}
