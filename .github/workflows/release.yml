@@ -16,7 +16,7 @@ jobs:
       matrix:
         include:
           - platform: 'macos-latest'
-            bundles: 'dmg'
+            bundles: 'app,dmg'
           - platform: 'windows-latest'
             bundles: 'nsis'
           - platform: 'ubuntu-22.04'
