@@ -1,3 +1,4 @@
+use crate::core::project::{self, is_electron_project, name, read, rel};
 use crate::git::{self, GitInfo};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -33,6 +34,8 @@ pub struct ProjectScan {
     pub targets: Vec<VersionTarget>,
     pub warnings: Vec<String>,
     pub git: Option<GitInfo>,
+    pub app_name: Option<String>,
+    pub bundle_id: Option<String>,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub struct RecentProject {
@@ -62,51 +65,16 @@ impl Default for AppSettings {
     }
 }
 
-const IGNORED: &[&str] = &[
-    "node_modules",
-    "vendor",
-    ".git",
-    "build",
-    "dist",
-    "DerivedData",
-    "Pods",
-    ".dart_tool",
-    "generated",
-    ".klenuabuild-backup",
-    ".versionpilot-backup",
-];
-
 pub fn scan(root: &Path) -> Result<ProjectScan, String> {
-    if !root.is_dir() {
-        return Err("Please choose a valid project folder.".into());
-    }
-    let pubspec = root.join("pubspec.yaml");
-    let files = walk(root)?;
-    let pbx = files
-        .iter()
-        .find(|p| p.to_string_lossy().ends_with(".xcodeproj/project.pbxproj"))
-        .cloned();
-    let info_plists: Vec<PathBuf> = files
-        .iter()
-        .filter(|p| p.file_name().and_then(|n| n.to_str()) == Some("Info.plist"))
-        .cloned()
-        .collect();
-    let gradle = [
-        root.join("android/app/build.gradle"),
-        root.join("android/app/build.gradle.kts"),
-        root.join("app/build.gradle"),
-        root.join("app/build.gradle.kts"),
-    ]
-    .into_iter()
-    .find(|p| p.is_file());
+    let detected = project::detect(root)?;
+    let identity = crate::rename::current_identity(root)?;
+    let pubspec = detected.pubspec;
+    let pbx = detected.pbx;
+    let info_plists = detected.info_plists;
+    let gradle = detected.gradle;
     let flutter = pubspec.is_file();
-    let tauri_config = [
-        root.join("src-tauri/tauri.conf.json"),
-        root.join("tauri.conf.json"),
-    ]
-    .into_iter()
-    .find(|p| p.is_file());
-    let electron_package = root.join("package.json");
+    let tauri_config = detected.tauri_config;
+    let electron_package = detected.electron_package_candidate;
     let mut targets = Vec::new();
     let mut warnings = Vec::new();
     let mut platforms = Vec::new();
@@ -159,13 +127,15 @@ pub fn scan(root: &Path) -> Result<ProjectScan, String> {
             targets,
             warnings,
             git: git::inspect(root),
+            app_name: identity.app_name,
+            bundle_id: identity.bundle_id,
         });
     }
     if let Some(file) = tauri_config {
-        return scan_desktop_json(root, "tauri", "Tauri", &file, false);
+        return scan_desktop_json(root, "tauri", "Tauri", &file, false, identity);
     }
     if electron_package.is_file() && is_electron_project(&electron_package)? {
-        return scan_desktop_json(root, "electron", "Electron", &electron_package, true);
+        return scan_desktop_json(root, "electron", "Electron", &electron_package, true, identity);
     }
     if let Some(file) = gradle {
         let (version, build, safe) = parse_gradle(&file)?;
@@ -256,6 +226,8 @@ pub fn scan(root: &Path) -> Result<ProjectScan, String> {
         targets,
         warnings,
         git: git::inspect(root),
+        app_name: identity.app_name,
+        bundle_id: identity.bundle_id,
     })
 }
 
@@ -265,6 +237,7 @@ fn scan_desktop_json(
     platform: &str,
     file: &Path,
     supports_build_number: bool,
+    identity: crate::rename::AppIdentity,
 ) -> Result<ProjectScan, String> {
     let (version, build, editable, note) = parse_desktop_json(file, supports_build_number)?;
     let mut warnings = Vec::new();
@@ -299,22 +272,12 @@ fn scan_desktop_json(
         targets,
         warnings,
         git: git::inspect(root),
+        app_name: identity.app_name,
+        bundle_id: identity.bundle_id,
     })
 }
 
-fn is_electron_project(file: &Path) -> Result<bool, String> {
-    let json: Value = serde_json::from_str(&read(file)?)
-        .map_err(|error| format!("Could not parse {}: {error}", file.display()))?;
-    let has_electron = |key: &str| {
-        json.get(key)
-            .and_then(Value::as_object)
-            .map(|items| items.contains_key("electron"))
-            .unwrap_or(false)
-    };
-    Ok(has_electron("dependencies") || has_electron("devDependencies"))
-}
-
-fn parse_desktop_json(
+pub(crate) fn parse_desktop_json(
     file: &Path,
     supports_build_number: bool,
 ) -> Result<(Option<String>, Option<String>, bool, Option<String>), String> {
@@ -360,43 +323,7 @@ fn target(
         note,
     }
 }
-fn name(root: &Path) -> String {
-    root.file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Project")
-        .to_string()
-}
-fn rel(root: &Path, file: &Path) -> String {
-    file.strip_prefix(root)
-        .unwrap_or(file)
-        .to_string_lossy()
-        .into()
-}
-fn walk(root: &Path) -> Result<Vec<PathBuf>, String> {
-    fn go(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
-        for e in fs::read_dir(dir).map_err(|e| e.to_string())? {
-            let p = e.map_err(|e| e.to_string())?.path();
-            if p.is_dir() {
-                if !IGNORED
-                    .iter()
-                    .any(|n| p.file_name().and_then(|x| x.to_str()) == Some(*n))
-                {
-                    go(&p, out)?
-                }
-            } else {
-                out.push(p)
-            }
-        }
-        Ok(())
-    }
-    let mut out = Vec::new();
-    go(root, &mut out)?;
-    Ok(out)
-}
-fn read(file: &Path) -> Result<String, String> {
-    fs::read_to_string(file).map_err(|e| format!("Could not read {}: {}", file.display(), e))
-}
-fn parse_flutter(file: &Path) -> Result<(Option<String>, Option<String>), String> {
+pub(crate) fn parse_flutter(file: &Path) -> Result<(Option<String>, Option<String>), String> {
     let t = read(file)?;
     let re = Regex::new(r"(?m)^\s*version\s*:\s*([^\s#]+)").unwrap();
     let cap = re.captures(&t);
@@ -409,7 +336,7 @@ fn parse_flutter(file: &Path) -> Result<(Option<String>, Option<String>), String
         .map(str::to_string);
     Ok((v, b))
 }
-fn parse_gradle(file: &Path) -> Result<(Option<String>, Option<String>, bool), String> {
+pub(crate) fn parse_gradle(file: &Path) -> Result<(Option<String>, Option<String>, bool), String> {
     let t = read(file)?;
     let (v, b, safe) = gradle_values(&t);
     Ok((v, b, safe))
@@ -456,7 +383,7 @@ fn simple_gradle_variable(t: &str, property: &str, quoted: bool) -> Option<Strin
         None
     }
 }
-fn parse_pbx(file: &Path) -> Result<(Option<String>, Option<String>, bool), String> {
+pub(crate) fn parse_pbx(file: &Path) -> Result<(Option<String>, Option<String>, bool), String> {
     let t = read(file)?;
     let vr = Regex::new(r"MARKETING_VERSION\s*=\s*([^;]+);").unwrap();
     let br = Regex::new(r"CURRENT_PROJECT_VERSION\s*=\s*([^;]+);").unwrap();
@@ -474,7 +401,7 @@ fn parse_pbx(file: &Path) -> Result<(Option<String>, Option<String>, bool), Stri
         && !bs.is_empty();
     Ok((vs.first().cloned(), bs.first().cloned(), safe))
 }
-fn parse_plist(file: &Path) -> Result<(Option<String>, Option<String>, bool), String> {
+pub(crate) fn parse_plist(file: &Path) -> Result<(Option<String>, Option<String>, bool), String> {
     let t = read(file)?;
     let get = |key: &str| {
         let re = Regex::new(&format!(
@@ -494,7 +421,7 @@ fn parse_plist(file: &Path) -> Result<(Option<String>, Option<String>, bool), St
             .unwrap_or(false);
     Ok((v, b, safe))
 }
-fn valid_version(v: &str) -> bool {
+pub(crate) fn valid_version(v: &str) -> bool {
     let p: Vec<_> = v.split('.').collect();
     p.len() == 3
         && p.iter()
@@ -598,5 +525,22 @@ mod tests {
         assert_eq!(tauri_scan.project_type, "Tauri");
         assert_eq!(tauri_scan.version.as_deref(), Some("2.3.4"));
         let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn scan_reports_current_app_name_and_bundle_id() {
+        let root = env::temp_dir().join(format!("klenuabuild-identity-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("src-tauri")).unwrap();
+        fs::write(
+            root.join("src-tauri/tauri.conf.json"),
+            "{\n  \"version\": \"2.3.4\",\n  \"productName\": \"My App\",\n  \"identifier\": \"com.acme.myapp\"\n}\n",
+        )
+        .unwrap();
+
+        let scan = scan(&root).unwrap();
+        assert_eq!(scan.app_name.as_deref(), Some("My App"));
+        assert_eq!(scan.bundle_id.as_deref(), Some("com.acme.myapp"));
+        let _ = fs::remove_dir_all(root);
     }
 }

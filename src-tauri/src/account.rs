@@ -47,6 +47,8 @@ pub struct SyncProject {
     pub build: Option<String>,
     pub platforms: Vec<String>,
     pub source_of_truth: Option<String>,
+    pub app_name: Option<String>,
+    pub bundle_id: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -276,6 +278,8 @@ pub fn sync(scan: SyncProject, state: &AccountState) -> Result<String, String> {
         "build": scan.build,
         "platforms": scan.platforms,
         "source_of_truth": scan.source_of_truth,
+        "app_name": scan.app_name,
+        "bundle_id": scan.bundle_id,
     });
     let (mut status, mut body) = send_sync(&session, &project)?;
     if status == StatusCode::UNAUTHORIZED {

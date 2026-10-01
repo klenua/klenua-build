@@ -1,10 +1,15 @@
 mod account;
 mod backup;
+mod check;
+mod core;
 mod git;
+mod rename;
 mod scanner;
 mod writers;
 
 use account::{Account, AccountState, SyncProject, SyncStatus};
+use check::CheckReport;
+use rename::RenamePreview;
 use scanner::{AppSettings, ProjectScan, RecentProject};
 use std::path::Path;
 use writers::Preview;
@@ -54,6 +59,43 @@ fn apply_changes(
 #[tauri::command]
 fn restore_last_change(path: String) -> Result<String, String> {
     backup::restore(Path::new(&path))
+}
+
+#[tauri::command]
+fn run_check(path: String) -> Result<CheckReport, String> {
+    check::check(Path::new(&path))
+}
+
+#[tauri::command]
+fn preview_rename_name(path: String, name: String) -> Result<RenamePreview, String> {
+    rename::preview_name(Path::new(&path), &name)
+}
+
+#[tauri::command]
+fn preview_rename_id(path: String, id: String) -> Result<RenamePreview, String> {
+    rename::preview_id(Path::new(&path), &id)
+}
+
+#[tauri::command]
+fn apply_rename_name(path: String, name: String) -> Result<String, String> {
+    let root = Path::new(&path);
+    let preview = rename::preview_name(root, &name)?;
+    if preview.preview.changes.is_empty() {
+        return Err("No safe changes were found. Manual review required.".into());
+    }
+    writers::apply(root, preview.preview)?;
+    Ok("Display name applied safely. A backup is available through Restore Last Change.".into())
+}
+
+#[tauri::command]
+fn apply_rename_id(path: String, id: String) -> Result<String, String> {
+    let root = Path::new(&path);
+    let preview = rename::preview_id(root, &id)?;
+    if preview.preview.changes.is_empty() {
+        return Err("No safe changes were found. Manual review required.".into());
+    }
+    writers::apply(root, preview.preview)?;
+    Ok("Bundle/application ID applied safely. A backup is available through Restore Last Change.".into())
 }
 
 #[tauri::command]
@@ -119,6 +161,11 @@ pub fn run() {
             preview_changes,
             apply_changes,
             restore_last_change,
+            run_check,
+            preview_rename_name,
+            preview_rename_id,
+            apply_rename_name,
+            apply_rename_id,
             get_recent_projects,
             remove_recent_project,
             get_app_settings,

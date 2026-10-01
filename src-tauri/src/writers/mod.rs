@@ -1,34 +1,11 @@
-use crate::{backup, scanner};
+use crate::core::change::{changed, FileChange, LineChange};
+pub use crate::core::change::Preview;
+use crate::scanner;
 use regex::Regex;
-use serde::Serialize;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
+use std::path::Path;
 
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct LineChange {
-    pub before: String,
-    pub after: String,
-}
-#[derive(Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct FileChange {
-    pub file: String,
-    pub changes: Vec<LineChange>,
-    #[serde(skip)]
-    pub original: String,
-    #[serde(skip)]
-    pub updated: String,
-    #[serde(skip)]
-    pub absolute: PathBuf,
-}
-#[derive(Serialize, Clone)]
-pub struct Preview {
-    pub changes: Vec<FileChange>,
-    pub warnings: Vec<String>,
-}
+pub use crate::core::change::apply;
 
 pub fn preview(root: &Path, version: &str, build: &str) -> Result<Preview, String> {
     if !version.is_empty() && !valid_version(version) {
@@ -77,20 +54,7 @@ pub fn preview(root: &Path, version: &str, build: &str) -> Result<Preview, Strin
     }
     Ok(Preview { changes, warnings })
 }
-pub fn apply(root: &Path, preview: Preview) -> Result<(), String> {
-    for file in preview.changes {
-        backup::save(root, &file.absolute, &file.original)?;
-        fs::write(&file.absolute, file.updated)
-            .map_err(|e| format!("Could not write {}: {}", file.file, e))?;
-    }
-    Ok(())
-}
 
-fn changed(before: String, after: String, d: &mut Vec<LineChange>) {
-    if before != after {
-        d.push(LineChange { before, after })
-    }
-}
 fn rewrite_flutter(input: &str, v: &str, b: &str) -> Result<(String, Vec<LineChange>), String> {
     let re = Regex::new(r"(?m)^(\s*version\s*:\s*)([^\s#]+)(.*)$").unwrap();
     let cap = re
